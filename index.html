@@ -1,0 +1,255 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Hawks vs Doves Simulation</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            text-align: center;
+            padding: 20px;
+            background-color: #f4f4f9;
+        }
+        #startButton {
+            padding: 10px 20px;
+            font-size: 16px;
+            cursor: pointer;
+            background-color: #4CAF50;
+            color: white;
+            border: none;
+            border-radius: 5px;
+        }
+        #results {
+            margin-top: 20px;
+        }
+        table {
+            margin: 20px auto;
+            border-collapse: collapse;
+            width: 80%;
+        }
+        table, th, td {
+            border: 1px solid #ddd;
+        }
+        th, td {
+            padding: 10px;
+            text-align: center;
+        }
+        canvas {
+            max-width: 100%;
+            margin-top: 20px;
+        }
+    </style>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+</head>
+<body>
+    <h1>Hawks vs Doves Simulation</h1>
+    <p>Simulate the evolution of cooperation (Doves) vs aggression (Hawks) in a population</p>
+
+    <button id="startButton">Start Simulation</button>
+
+    <div id="results">
+        <h2>Simulation Results</h2>
+        <table id="resultsTable">
+            <thead>
+                <tr>
+                    <th>Day</th>
+                    <th>Hawks</th>
+                    <th>Doves</th>
+                </tr>
+            </thead>
+            <tbody>
+                <!-- Results will be appended here -->
+            </tbody>
+        </table>
+
+        <canvas id="resultsChart" width="400" height="200"></canvas>
+    </div>
+
+    <script>
+        class Creature {
+            constructor(type) {
+                this.type = type; // 'hawk' or 'dove'
+                this.energy = 0;
+            }
+
+            interact(other) {
+                if (this.type === 'dove' && other.type === 'dove') {
+                    this.energy += 0.5;
+                    other.energy += 0.5;
+                } else if (this.type === 'hawk' && other.type === 'dove') {
+                    this.energy += 0.75;
+                    other.energy += 0.25;
+                } else if (this.type === 'dove' && other.type === 'hawk') {
+                    this.energy += 0.25;
+                    other.energy += 0.75;
+                } else if (this.type === 'hawk' && other.type === 'hawk') {
+                    this.energy += 0;
+                    other.energy += 0;
+                }
+            }
+
+            survive() {
+                if (this.energy >= 1) {
+                    this.energy = 0;
+                    return true;
+                } else if (this.energy >= 0.5) {
+                    return true;
+                } else if (this.energy >= 0.25) {
+                    return Math.random() < 0.5;
+                }
+                return false;
+            }
+
+            reproduce() {
+                if (this.energy >= 0.75) {
+                    return new Creature(this.type);
+                }
+                return null;
+            }
+        }
+
+        class Simulation {
+            constructor(populationSize, foodAmount, days) {
+                this.populationSize = populationSize;
+                this.foodAmount = foodAmount;
+                this.days = days;
+                this.creatures = [];
+                this.createInitialPopulation();
+            }
+
+            createInitialPopulation() {
+                for (let i = 0; i < this.populationSize; i++) {
+                    const type = Math.random() < 0.5 ? 'hawk' : 'dove';
+                    this.creatures.push(new Creature(type));
+                }
+            }
+
+            distributeFood() {
+                let foodLeft = this.foodAmount;
+                while (foodLeft > 0 && this.creatures.length > 0) {
+                    const creature = this.creatures[Math.floor(Math.random() * this.creatures.length)];
+                    creature.energy += 1;
+                    foodLeft--;
+                }
+            }
+
+            runInteractions() {
+                for (let i = 0; i < this.creatures.length; i++) {
+                    const creature = this.creatures[i];
+                    const otherCreature = this.creatures[Math.floor(Math.random() * this.creatures.length)];
+                    if (creature !== otherCreature) {
+                        creature.interact(otherCreature);
+                    }
+                }
+            }
+
+            processSurvivalAndReproduction() {
+                const nextGeneration = [];
+                for (let i = 0; i < this.creatures.length; i++) {
+                    const creature = this.creatures[i];
+                    if (creature.survive()) {
+                        nextGeneration.push(creature);
+                        const offspring = creature.reproduce();
+                        if (offspring) nextGeneration.push(offspring);
+                    }
+                }
+                this.creatures = nextGeneration;
+            }
+
+            simulateDay() {
+                this.distributeFood();
+                this.runInteractions();
+                this.processSurvivalAndReproduction();
+            }
+
+            runSimulation() {
+                let stats = [];
+                for (let day = 0; day < this.days; day++) {
+                    this.simulateDay();
+                    const hawks = this.creatures.filter(creature => creature.type === 'hawk').length;
+                    const doves = this.creatures.filter(creature => creature.type === 'dove').length;
+                    stats.push({ day: day + 1, hawks, doves });
+                }
+                return stats;
+            }
+        }
+
+        function startSimulation() {
+            const simulation = new Simulation(100, 50, 100); // 100 creatures, 50 food, 100 days
+            const results = simulation.runSimulation();
+
+            // Display the results in the table
+            const resultsTable = document.getElementById('resultsTable').getElementsByTagName('tbody')[0];
+            resultsTable.innerHTML = ''; // Clear previous results
+            results.forEach(result => {
+                const row = resultsTable.insertRow();
+                row.insertCell(0).textContent = result.day;
+                row.insertCell(1).textContent = result.hawks;
+                row.insertCell(2).textContent = result.doves;
+            });
+
+            // Update the chart with the new data
+            updateChart(results);
+
+            document.getElementById('results').style.display = 'block'; // Show the results section
+        }
+
+        // Chart.js graph setup
+        let chart = null;
+
+        function updateChart(results) {
+            const labels = results.map(result => `Day ${result.day}`);
+            const hawksData = results.map(result => result.hawks);
+            const dovesData = results.map(result => result.doves);
+
+            const ctx = document.getElementById('resultsChart').getContext('2d');
+
+            if (chart) {
+                chart.destroy(); // Destroy the old chart if it exists
+            }
+
+            chart = new Chart(ctx, {
+                type: 'line',
+                data: {
+                    labels: labels,
+                    datasets: [
+                        {
+                            label: 'Hawks',
+                            data: hawksData,
+                            borderColor: 'rgb(255, 99, 132)',
+                            fill: false,
+                            tension: 0.1
+                        },
+                        {
+                            label: 'Doves',
+                            data: dovesData,
+                            borderColor: 'rgb(54, 162, 235)',
+                            fill: false,
+                            tension: 0.1
+                        }
+                    ]
+                },
+                options: {
+                    responsive: true,
+                    plugins: {
+                        legend: {
+                            position: 'top',
+                        },
+                        tooltip: {
+                            callbacks: {
+                                label: function(tooltipItem) {
+                                    return tooltipItem.dataset.label + ': ' + tooltipItem.raw;
+                                }
+                            }
+                        }
+                    }
+                }
+            });
+        }
+
+        // Event listener to start simulation
+        document.getElementById('startButton').addEventListener('click', startSimulation);
+    </script>
+</body>
+</html>
